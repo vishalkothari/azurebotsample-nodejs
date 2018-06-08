@@ -29,9 +29,9 @@ server.post('/api/messages', connector.listen());
 * For samples and documentation, see: https://github.com/Microsoft/BotBuilder-Azure
 * ---------------------------------------------------------------------------------------- */
 
-var tableName = 'botdata';
-var azureTableClient = new botbuilder_azure.AzureTableClient(tableName, process.env['AzureWebJobsStorage']);
-var tableStorage = new botbuilder_azure.AzureBotStorage({ gzipData: false }, azureTableClient);
+// var tableName = 'botdata';
+// var azureTableClient = new botbuilder_azure.AzureTableClient(tableName, process.env['AzureWebJobsStorage']);
+// var tableStorage = new botbuilder_azure.AzureBotStorage({ gzipData: false }, azureTableClient);
 
 // Create your bot with a function to receive messages from the user
 // This default message handler is invoked if the user's utterance doesn't
@@ -40,7 +40,7 @@ var bot = new builder.UniversalBot(connector, function (session, args) {
     session.send('You reached the default message handler. You said \'%s\'.', session.message.text);
 });
 
-bot.set('storage', tableStorage);
+// bot.set('storage', tableStorage);
 
 // Make sure you add code to validate these fields
 //console.log(process.env)
@@ -91,16 +91,59 @@ bot.dialog('CancelDialog',
     }
 ).triggerAction({
     matches: 'Cancel'
-})
+});
 
-bot.dialog('CreditLimitDialog',
-    (session) => {
-        session.send('You credit limit is $5000', session.message.text);
-        session.endDialog();
+bot.dialog('CreditLimitDialog', [
+    function (session, args, next) {
+        session.dialogData.profile = args || {}; // Set the profile or create the object.
+        if (!session.dialogData.profile.accountType) {
+            builder.Prompts.choice(session, "What's your account type?", "silver|gold|platinum", { listStyle: 3 });
+        } else {
+            next(); // Skip if we already have this info.
+        }
+    },
+    function (session, results, next) {
+        if (results.response) {
+            // Save account type if we asked for it.
+            console.log(results.response);
+            session.dialogData.profile.accountType = results.response.entity;
+        }
+        if (!session.dialogData.profile.location) {
+            builder.Prompts.text(session, "What is your location?");
+        } else {
+            next(); // Skip if we already have this info.
+        }
+    },
+    function (session, results) {
+        console.log("in next");
+        if (results.response) {
+            // Save location if we asked for it.
+            session.dialogData.profile.location = results.response;
+        }
+        //console.log(session.dialogData.profile);
+        session.send(`Hello credit limit for ${session.dialogData.profile.accountType} and in ${session.dialogData.profile.location} is $10000`);        
     }
-).triggerAction({
-    matches: 'CreditLimit'
+]).triggerAction({
+   matches: 'CreditLimit'
+});
+    
+
+// bot.dialog('CreditLimitDialog',
+//     (session) => {
+//         session.send('You credit limit is $5000', session.message.text);
+//         session.endDialog();
+//     }
+// ).triggerAction({
+//     matches: 'CreditLimit'
+// })
+
+// The dialog stack is cleared and this dialog is invoked when the user enters 'help'.
+bot.dialog('help', function (session, args, next) {
+    session.endDialog("Ok. Our agent will get in touch with you shortly.");
 })
+.triggerAction({
+    matches: /^help$/i,
+});
 
 bot.dialog('AzureVMQuestions', function (session, args) {
     var query = session.message.text;
